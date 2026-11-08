@@ -540,15 +540,18 @@ export default function AppDetailPage() {
   // an absent app) would run third-party setup code with gateway privileges
   // without user intent. Router state can only be produced by an in-app
   // navigate() call, so it cannot be forged from outside the app.
-  const autoActionTriggered = useRef(false)
+  // One run per history entry, so a sidebar Update reaches a page already open
+  // for its app. While an action runs here, the request runs nothing and says why.
+  const autoActionTakenFor = useRef<string | null>(null)
   useEffect(() => {
-    if (!app || autoActionTriggered.current) return
+    if (!app || autoActionTakenFor.current === location.key) return
     const stateAction = (location.state as { autoAction?: string } | null)?.autoAction
     if (stateAction !== 'install' && stateAction !== 'update') return
     if (stateAction === 'install' && app.installed) return
-    autoActionTriggered.current = true
+    autoActionTakenFor.current = location.key
     // Clear the state so a refresh or Back/Forward doesn't re-fire it.
     navigate(`${location.pathname}${location.search}`, { replace: true, state: null })
+    if (actionBusy) { setError(i18nT('pages.libraryPage.rail_busy_notice', { name: appDisplayName(app) })); return }
     // A directory install with no registry update pending is this page's Sync (a
     // re-copy). Everything else runs the streaming registry install, as Update does.
     if (stateAction === 'update' && app.installed && !isRegistrySourced(app) && !app.updateAvailable) {
