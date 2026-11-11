@@ -15,6 +15,8 @@ import { Card, CardTitle, Btn, Input, EmptyState, Badge } from './ui'
 import InfoTip from './InfoTip'
 import Clickable from './Clickable'
 import { useImeGuard } from '../hooks/useImeGuard'
+import { useConnected } from '../hooks/useConnected'
+import { offlineProps } from '../utils/offline'
 import { recordEvent } from '../rum'
 
 import { i18nT } from '../i18n/t'
@@ -39,6 +41,10 @@ import { registryRefreshFailureMessage, type RegistryRefreshResult } from './app
 // duplicate is what lets the two drift, and the drift would be silent because the
 // fields are structurally identical until one side gains a field.
 type Registry = ExternalRegistryRow
+
+// A row's refresh/remove icon refused while offline: the icon dims, while the
+// container keeps its own opacity, which drives the hover reveal.
+const OFFLINE_ICON = 'aria-disabled:cursor-not-allowed aria-disabled:[&>svg]:opacity-30'
 
 // Shell metacharacters / whitespace that must never appear in a repo value.
 const SHELL_META = /[\s;&|`$(){}<>'"\\]/
@@ -120,6 +126,11 @@ export default function RegistryManager({ bare = false }: { bare?: boolean } = {
   const [error, setError] = useState('')
   const [trustNotice, setTrustNotice] = useState<string[]>([])
   const [lastSyncedAt, setLastSyncedAt] = useState('')
+  // Add, remove, refresh and sync all write to the gateway, so each is refused
+  // while it is offline (offlineProps names why); opening the add form and the
+  // repository link stay live.
+  const connected = useConnected()
+  const offlineVerb = i18nT('utils.offline.manage_apps')
 
   const { data, isLoading } = useQuery({
     queryKey: ['registries'],
@@ -189,6 +200,7 @@ export default function RegistryManager({ bare = false }: { bare?: boolean } = {
   })
 
   const handleAdd = () => {
+    if (!connected) return
     const repo = editRepo.trim()
     // Send an empty name/branch when omitted so the BACKEND owns the defaults
     // (safe slug derivation + the 'main' branch default). Sending `name = repo`
@@ -228,6 +240,7 @@ export default function RegistryManager({ bare = false }: { bare?: boolean } = {
   }
 
   const handleRemove = (repo: string) => {
+    if (!connected) return
     setTrustNotice([])
     mutation.mutate(registries.filter(r => r.repo !== repo))
     recordEvent('registry_remove', { repo })
@@ -411,17 +424,19 @@ export default function RegistryManager({ bare = false }: { bare?: boolean } = {
                 <ExternalLink size={14} />
               </Clickable>
               <Clickable
-                className={`text-muted hover:text-accent transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${refreshMutation.isPending ? 'pointer-events-none opacity-30 [@media(hover:none)]:opacity-30' : '[@media(hover:none)]:opacity-100'}`}
-                onClick={() => refreshMutation.mutate(reg.repo)}
+                className={`text-muted hover:text-accent transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${OFFLINE_ICON} ${refreshMutation.isPending ? 'pointer-events-none opacity-30 [@media(hover:none)]:opacity-30' : '[@media(hover:none)]:opacity-100'}`}
+                onClick={() => { if (connected) refreshMutation.mutate(reg.repo) }}
                 aria-label={i18nT('components.registryManager.refresh_registry', { name: reg.label || reg.name || reg.repo })}
+                {...offlineProps(connected, offlineVerb, i18nT('components.registryManager.refresh_registry', { name: reg.label || reg.name || reg.repo }))}
               >
                 <RefreshCw size={14} className={refreshMutation.isPending && refreshMutation.variables === reg.repo ? 'animate-spin' : ''} />
               </Clickable>
               {!reg.isPinned && (
                 <Clickable
-                  className={`text-muted hover:text-danger transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${mutation.isPending ? 'pointer-events-none opacity-30 [@media(hover:none)]:opacity-30' : '[@media(hover:none)]:opacity-100'}`}
+                  className={`text-muted hover:text-danger transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${OFFLINE_ICON} ${mutation.isPending ? 'pointer-events-none opacity-30 [@media(hover:none)]:opacity-30' : '[@media(hover:none)]:opacity-100'}`}
                   onClick={() => handleRemove(reg.repo)}
                   aria-label={i18nT('components.registryManager.remove_registry', { name: reg.name })}
+                  {...offlineProps(connected, offlineVerb, i18nT('components.registryManager.remove_registry', { name: reg.name }))}
                 >
                   <Trash2 size={14} />
                 </Clickable>
@@ -482,7 +497,11 @@ export default function RegistryManager({ bare = false }: { bare?: boolean } = {
           </div>
           <div className="flex items-center gap-2 justify-end">
             <Btn onClick={() => { setAdding(false); setError('') }}>{i18nT('components.registryManager.cancel')}</Btn>
-            <Btn onClick={handleAdd} disabled={mutation.isPending}>
+            <Btn
+              onClick={handleAdd}
+              disabled={mutation.isPending || !connected}
+              {...offlineProps(connected, offlineVerb, i18nT('components.registryManager.add_registry'))}
+            >
               {mutation.isPending ? i18nT('components.registryManager.adding') : i18nT('components.registryManager.add_registry')}
             </Btn>
           </div>
@@ -495,9 +514,10 @@ export default function RegistryManager({ bare = false }: { bare?: boolean } = {
           {registries.length > 0 || pinned.length > 0 ? (
             <>
               <Btn
-                onClick={() => refreshMutation.mutate(undefined)}
-                disabled={refreshMutation.isPending}
+                onClick={() => { if (connected) refreshMutation.mutate(undefined) }}
+                disabled={refreshMutation.isPending || !connected}
                 aria-label={i18nT('components.registryManager.sync_registry_apps')}
+                {...offlineProps(connected, offlineVerb, i18nT('components.registryManager.sync_registry_apps'))}
               >
                 <RefreshCw size={14} className={refreshMutation.isPending && !refreshMutation.variables ? 'animate-spin' : ''} />
                 {refreshMutation.isPending && !refreshMutation.variables ? i18nT('components.registryManager.syncing') : i18nT('components.registryManager.sync_apps')}
