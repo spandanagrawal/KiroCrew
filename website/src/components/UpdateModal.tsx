@@ -5,6 +5,8 @@ import { AlertTriangle, Download, Loader2, X } from 'lucide-react'
 import { i18nT } from '../i18n/t'
 import type { UpdateState } from '../hooks/useUpdateSubscription'
 import { editionOwnsUpdatePrompts, gatewayStopCommand } from '../hooks/useUpdateSubscription'
+import { updateInfoQuery } from '../api/updateInfoQuery'
+import { desktopNotesSinceRunning } from '../pages/settings/updateChanges'
 import { useInstallDispatch } from '../hooks/useInstallDispatch'
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap'
 import { CopyCommand } from './agentHarness/CopyCommand'
@@ -85,6 +87,8 @@ export default function UpdateModal({ held = false }: { held?: boolean } = {}) {
     enabled: false, // populated by useUpdateSubscription (shell/appShell.tsx)
     staleTime: Infinity,
   })
+  // The running build's version and lane, to cut the notes to what it lacks.
+  const { data: info } = useQuery({ ...updateInfoQuery, enabled: update?.state === 'downloaded' })
 
   // Which surface the user closed: the "update ready" dialog or the install
   // takeover. One value names it, so closing the dialog never hides a later
@@ -218,7 +222,7 @@ export default function UpdateModal({ held = false }: { held?: boolean } = {}) {
   if (!open) return null
 
   const version = update!.version || ''
-  const notes = (update!.notes || '').trim()
+  const notes = desktopNotesSinceRunning(update!, info).trim()
   const dismiss = () => { if (!installing) setDismissed('ready') }
   // The header is the dialog's status claim, so it follows a rejected request:
   // "Update ready" above a failure notice would leave both standing. Each key

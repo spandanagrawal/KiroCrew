@@ -346,6 +346,10 @@ export function AboutPanelGatewayUpdates({
   // A git checkout that is only behind its upstream reports the version it
   // already runs as the target, so the text names no version then.
   const namedTarget = gwTarget && gwTarget !== runningVersion ? gwTarget : ''
+  // The version the update brings, from this tab's check or the background one.
+  const shownTarget = namedTarget
+    ? (gwTargetDisplay || namedTarget)
+    : (gwStatusLatestDisplay || gwStatusLatest) !== runningVersion ? (gwStatusLatestDisplay || gwStatusLatest) : ''
   // The update a person armed (applies at the next start) and the error the last
   // boot-time apply left, from the status frame.
   const armedVersion = useAppSelector(s => s.dashboard.status?.update_armed_version) || ''
@@ -382,7 +386,11 @@ export function AboutPanelGatewayUpdates({
         <>
           {showUpdate && (
             <p className="text-sm text-muted flex items-center gap-1.5">
-              <ArrowUp size={13} className="lucide-inline text-accent" /> {i18nT('pages.settings.aboutPanel.a_new_version')}{namedTarget ? ` (v${gwTargetDisplay || namedTarget})` : ''} {i18nT('pages.settings.aboutPanel.is_available')}
+              {/* Named from the background check too, so the reader learns which
+                  version before running a check of their own. */}
+              <ArrowUp size={13} className="lucide-inline text-accent" /> {shownTarget
+                ? i18nT('pages.settings.aboutPanel.named_update_available', { name: botName || 'Kiro Crew', version: shownTarget })
+                : <>{i18nT('pages.settings.aboutPanel.a_new_version')} {i18nT('pages.settings.aboutPanel.is_available')}</>}
             </p>
           )}
           {showManualUpdate ? (
@@ -483,12 +491,13 @@ export function AboutPanelGatewayUpdates({
           )}
           {showUpdate && (
             <AboutPanelUpdateChanges
-              notes={gwChanges}
+              notes={newestIsLocal ? gwChanges : ''}
               sinceBuild
+              checked={!showManualUpdate && newestIsLocal && gwCheck.isSuccess}
               version={gwTargetDisplay || gwStatusLatestDisplay || namedTarget || gwStatusLatest}
               // A checkout that applies its own update: its check carries the
-              // changelog lines, and this tab has not run one yet.
-              onLoad={!showManualUpdate && !gwCheck.isSuccess ? () => gwCheck.mutate() : undefined}
+              // changelog lines, and this tab has not run the newest one yet.
+              onLoad={!showManualUpdate && (!newestIsLocal || !gwCheck.isSuccess) ? () => gwCheck.mutate() : undefined}
               loading={gwCheck.isPending}
             />
           )}
@@ -509,11 +518,7 @@ export function AboutPanelGatewayUpdates({
                 })
               : <>{botName || 'Kiro Crew'} {i18nT('pages.settings.aboutPanel.checks_for_updates_automatically_you_can_also_ch')}</>}
           </p>
-          <div>
-            <Btn onClick={() => gwCheck.mutate()} disabled={gwCheck.isPending}>
-              <RefreshCw size={13} className={`lucide-inline ${gwCheck.isPending ? 'animate-spin' : ''}`} /> {i18nT('pages.settings.aboutPanel.check_for_updates')}
-            </Btn>
-          </div>
+          {/* The Check for updates button sits in the install card above. */}
           {/* A 200 is transport success, NOT a verdict: `checked` is the
               verdict. Gating the success line on it is the fix for the
               original bug, where a wheel install's no-op check rendered

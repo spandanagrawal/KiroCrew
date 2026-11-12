@@ -25,6 +25,9 @@ async function mount(initial?: UpdateState) {
   const rendered = renderWithProviders(<UpdateModal />)
   const push = async (next: UpdateState) => {
     await act(async () => { rendered.queryClient.setQueryData(['update-state'], next) })
+    // One more macrotask: the notification can land after the microtask above
+    // (seen when the file runs a single test, or after a test that polled).
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
   }
   if (initial) await push(initial)
   return { ...rendered, push }
@@ -75,6 +78,22 @@ describe('UpdateModal', () => {
     expect(dialog()?.textContent).toContain(i18nT('components.updateModal.install_on_quit_timing'))
     expect(dialog()?.textContent).not.toMatch(/relaunch automatically/i)
     expect(dialog()?.textContent).not.toMatch(/installation progress/i)
+  })
+
+  it('shows only the sections newer than the running build from notes that span several releases', async () => {
+    ;(window as unknown as { updateAPI?: unknown }).updateAPI = {
+      armsOnQuit: true,
+      install,
+      getInfo: vi.fn().mockResolvedValue({ version: '0.12.3', channel: 'stable' }),
+    }
+    await mount({
+      state: 'downloaded',
+      version: '0.12.4',
+      notes: '## [0.12.4]\n\n- zzq newest change\n\n## [0.12.3]\n\n- zzq running change\n\n## [0.12.2]\n\n- zzq older change',
+    })
+    await waitFor(() => expect(dialog()?.textContent).not.toContain('zzq running change'))
+    expect(dialog()?.textContent).toContain('zzq newest change')
+    expect(dialog()?.textContent).not.toContain('zzq older change')
   })
 
   it('omits the notes paragraph when the notes are blank', async () => {
