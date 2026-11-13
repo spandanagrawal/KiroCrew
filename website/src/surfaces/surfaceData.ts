@@ -8,8 +8,8 @@
  * Everywhere and the agent's location index cannot name a surface three ways.
  *
  * Only route, label key, group and the advertising flags live here. A field the
- * registry documents (`appOnly`, `hiddenFromNav`, `previewFlag`, `pinnable`)
- * means exactly what `registry.ts` says it means.
+ * registry documents (`appOnly`, `hiddenFromNav`, `previewFlag`, `pinnable`,
+ * `configSwitch`, `formerApp`) means exactly what `registry.ts` says it means.
  */
 import { PREVIEW_WEBHOOKS } from '../utils/previewFlags'
 
@@ -40,6 +40,8 @@ export interface SurfaceNavData {
   hiddenFromNav?: boolean
   previewFlag?: string
   pinnable?: boolean
+  configSwitch?: string
+  formerApp?: string
 }
 
 /** One built-in surface per key, keyed by `navId`. Order = rail order. */
@@ -58,7 +60,7 @@ export const BUILTIN_SURFACE_NAV = {
   },
   projects: {
     navId: 'projects', route: '/projects', label: surfaceMachineValue('Task Runner'), labelKey: 'nav.task_runner',
-    group: surfaceMachineValue('Apps'), appOnly: true,
+    group: surfaceMachineValue('Apps'), configSwitch: 'taskrunner.enabled', formerApp: 'projects',
   },
   schedule: {
     navId: 'schedule', route: '/schedule', label: surfaceMachineValue('Schedule'), labelKey: 'nav.schedule',
@@ -114,4 +116,18 @@ export function capabilitySubItemNav(s: { tab: string; labelKey: string; label: 
     group: surfaceMachineValue('Main'),
     pinnable: true,
   }
+}
+
+/**
+ * Whether a surface's `configSwitch` lets it be offered, given the
+ * `['kirocrewConfig']` read. Only a literal `false` turns it off, so a surface
+ * with no switch, or a config not read yet, is offered as before.
+ */
+export function surfaceSwitchedOn(s: { configSwitch?: string }, config: unknown): boolean {
+  if (!s.configSwitch) return true
+  let value: unknown = config
+  for (const part of s.configSwitch.split('.')) {
+    value = value !== null && typeof value === 'object' ? (value as Record<string, unknown>)[part] : undefined
+  }
+  return value !== false
 }

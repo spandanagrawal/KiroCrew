@@ -43,8 +43,9 @@ registry, or install a local directory from a path.
 - **Pin** and **Unpin**, in a Library tile's ⋯ menu, control whether an enabled app
   shows in the sidebar; the tile's caption says which. They do not disable anything.
 
-Two shipped apps are on from a fresh install: **Command Bar** and **Task Runner**.
-Everything else waits for you.
+One shipped app is on from a fresh install: **Command Bar**. Everything else waits
+for you. Task Runner is not an app: it is part of the dashboard, turned on and off in
+Settings (see [task-runner.md](task-runner.md)).
 
 ## What ships
 
@@ -76,7 +77,6 @@ Each line below is drawn from the app's own manifest description.
 
 | App | What it does |
 |---|---|
-| **Task Runner** (`projects`) | Hand over a multi-step job and let it run to completion unattended. See [task-runner.md](task-runner.md). |
 | **Workflows** (`workflows`) | Author, run and watch multi-phase agent runs written from a plain-language goal. See [workflows.md](workflows.md). |
 | **Research Lab** (`auto-research`) | Multi-cycle research campaigns that keep working after you walk away. See [research-lab.md](research-lab.md). |
 | **Channels** (`channels`) | A shared room where several agents work one problem in the open, with no private agent-to-agent messaging. |

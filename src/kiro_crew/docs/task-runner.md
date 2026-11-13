@@ -19,6 +19,16 @@ they run. The page has no spec-path field; a spec path is accepted by
 `kirocrew run`, the `task_run` tool, the `task run` keyword below and
 `POST /api/taskrunner`.
 
+### Turning Task Runner off
+
+Task Runner is on unless you turn it off with the **Show Task Runner** switch in
+**Settings > Display > View** (`taskrunner.enabled` in `config.json`). Off, its row
+leaves the left rail and Search Everywhere, and every new start is refused: the
+page, the `task_run` tool, the `task run` keyword and a saved task-plan workflow.
+A run already going keeps going, and the page still opens from a link or
+**Alt+P** / **Option+P**. Task Runner used to be an app you turned on and off in
+Library; if you had turned it off there, it stays off after the update.
+
 ### Via Slack
 
 ```

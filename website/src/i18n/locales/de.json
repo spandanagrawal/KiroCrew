@@ -5237,20 +5237,6 @@
         "warnings": "Warnungen"
       }
     },
-    "projects": {
-      "manifest": {
-        "description": "Übergib eine mehrstufige Aufgabe und lass sie unbeaufsichtigt bis zum Ende laufen. Beschreibe die Arbeit in normaler Sprache, füge eine schriftliche Spezifikation ein oder lade eine YAML-Datei hoch, und erstelle dann entweder zuerst einen Plan, um die Schritte zu prüfen, oder starte sofort. Jede Ausführung erhält ihre eigene Seite mit dem Schritt-für-Schritt-Fortschritt, und du kannst sie jederzeit pausieren, fortsetzen, wiederholen oder stoppen.",
-        "display_name": "Task Runner",
-        "highlight_1": "Drei Wege hinein: die Arbeit in normaler Sprache beschreiben, eine Spezifikation einfügen oder YAML hochladen",
-        "highlight_2": "Einen Plan erstellen und die Schritte prüfen, bevor du eine Ausführung startest",
-        "highlight_3": "Ausführungen laufen unbeaufsichtigt, mit Schritt-für-Schritt-Fortschritt auf der eigenen Seite der Ausführung",
-        "highlight_4": "Eine Ausführung jederzeit pausieren, fortsetzen, wiederholen oder stoppen",
-        "highlight_5": "Behält einen Verlauf früherer Ausführungen und ihrer Ergebnisse",
-        "page_label": "Task Runner",
-        "use_case_1": "Plane und starte einen abhängigen Multi-Agenten-Auftrag aus normaler Sprache, einer vorhandenen Spezifikation oder deterministischem YAML.",
-        "configuration_1": "Öffne Task Runner, wähle Compose, From Spec oder From YAML, einen Agenten und optional einen absoluten Arbeitsbereich und prüfe dann mit Plan oder starte sofort mit Run."
-      }
-    },
     "specBuilder": {
       "api": {
         "phase_building": "wird umgesetzt",
@@ -19555,7 +19541,10 @@
         "remote_editor_host_save_failed": "SSH-Host konnte nicht gespeichert werden. Verwende einen Hostnamen wie dev-box oder dev.example.com, ohne Port oder Pfad.",
         "remote_editor_host_save_error": "Der SSH-Host konnte nicht gespeichert werden.",
         "show_topbar_search": "Suche in der oberen Leiste anzeigen",
-        "show_topbar_search_desc": "Zeigt das Suchfeld in der Mitte der oberen Leiste. Ausgeschaltet bekommen die Bedienelemente links und rechts seinen Platz, sodass die Werte für CPU, MEM und DSK auch in schmaleren Fenstern sichtbar bleiben. Das Tastenkürzel für die Suche öffnet sie weiterhin. Solange die Tastenkürzel ausgeschaltet sind, bleibt das Suchfeld sichtbar."
+        "show_topbar_search_desc": "Zeigt das Suchfeld in der Mitte der oberen Leiste. Ausgeschaltet bekommen die Bedienelemente links und rechts seinen Platz, sodass die Werte für CPU, MEM und DSK auch in schmaleren Fenstern sichtbar bleiben. Das Tastenkürzel für die Suche öffnet sie weiterhin. Solange die Tastenkürzel ausgeschaltet sind, bleibt das Suchfeld sichtbar.",
+        "task_runner": "Task Runner anzeigen",
+        "task_runner_hint": "Task Runner führt mehrstufige Aufgabenpläne unbeaufsichtigt aus. Ausgeschaltet verschwindet er aus der Seitenleiste und der Suche, und neue Läufe werden abgelehnt. Bereits gestartete Läufe laufen weiter.",
+        "task_runner_save_failed": "Die Einstellung für Task Runner konnte nicht gespeichert werden. Versuch es noch einmal."
       },
       "importPanel": {
         "agent_data": "Agenten-Daten",

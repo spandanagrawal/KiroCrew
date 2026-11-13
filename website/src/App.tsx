@@ -128,6 +128,7 @@ const LibraryPage = lazy(() => import('./pages/apps/LibraryPage'))
 // popout frame): a lazy boundary there would not move their code.
 const NotificationsPage = lazyPage(() => import('./pages/NotificationsPage'))
 const WebhooksPage = lazyPage(() => import('./pages/WebhooksPage'))
+const ProjectsPage = lazyPage(() => import('./pages/ProjectsPage'))
 const CapabilitiesPage = lazyPage(() => import('./pages/CapabilitiesPage'))
 const ArtifactsPage = lazyPage(() => import('./pages/ArtifactsPage'))
 const RemoteArtifactDetailPage = lazyPage(() => import('./pages/RemoteArtifactDetailPage'))
@@ -892,6 +893,8 @@ export default function App() {
             <Route path="/overview" element={<Navigate to="/settings/overview" replace />} />
             <Route path="/crew-board" element={<ErrorBoundary><Suspense fallback={null}><CrewBoardPage /></Suspense></ErrorBoundary>} />
             <Route path="/schedule" element={<SchedulePage />} />
+            {/* Task Runner: a core page, routed here rather than through the builtin app registry. */}
+            <Route path="/projects/*" element={<ProjectsPage />} />
             {/* Agents live in the Agent Capabilities panel; Connections is a Settings tab. */}
             <Route path="/agents" element={<Navigate to="/capabilities" replace />} />
             <Route path="/mc-agents" element={<Navigate to="/capabilities" replace />} />
@@ -915,6 +918,8 @@ export default function App() {
             <Route path="/apps/library" element={<Suspense fallback={null}><LibraryPage /></Suspense>} />
             <Route path="/apps/detail/:name" element={<AppDetailPage />} />
             <Route path="/apps/migrate/:name" element={<MigrationPage />} />
+            {/* Task Runner's launch URL from when it was the built-in app `projects`. */}
+            <Route path="/apps/projects" element={<TasksRedirect />} />
             <Route path="/apps/:name" element={<AppPage />} />
             {/* Splat route: SettingsPage parses the trailing segments itself
                 (segment[0] = tab, segment[1] = sub; deeper segments reserved).

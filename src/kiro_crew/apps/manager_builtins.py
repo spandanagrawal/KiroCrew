@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from kiro_crew.apps.builtin_fold import carry_folded_switch
 from kiro_crew.apps.discovery import discover_builtin_apps
 from kiro_crew.apps.manager_activation import _app_activation_denied
 from kiro_crew.apps.manager_records import (
@@ -89,7 +90,6 @@ logger = logging.getLogger("kiro_crew.apps.manager")
 # path's test still forbids it.
 _DEFAULT_ON_BUILTINS: frozenset[str] = frozenset(
     {
-        "projects",  # Task Runner
         # Command Bar replaces the quick-search (Cmd+K) surface rather than adding
         # a sidebar entry, so shipping it off leaves the gesture on the legacy
         # palette and the launcher unseen. Disabling the app is what restores the
@@ -105,12 +105,11 @@ _DEFAULT_ON_BUILTINS: frozenset[str] = frozenset(
 # ``_DEFAULT_ON_BUILTINS`` answers "what does a FRESH install enable". This set
 # answers "which promotion has not yet reached installs that registered the app
 # while it was still default-off". Reading the first set for the second question
-# reverses deliberate opt-outs: ``projects`` (Task Runner) has shipped
-# ``defaultEnabled: true`` since it was aligned with the other builtins, long
-# before this allowlist existed, so it has been enabled and visible in the
-# sidebar on every existing install. A record showing ``enabled: false`` for it
-# is therefore a user who FOUND it and turned it off — the opposite of the
-# population a backfill exists to serve.
+# reverses deliberate opt-outs: an app that shipped ``defaultEnabled: true``
+# long before this allowlist existed has been enabled and visible in the sidebar
+# on every existing install, so a record showing ``enabled: false`` for it is a
+# user who FOUND it and turned it off, the opposite of the population a backfill
+# exists to serve.
 #
 # So a name belongs here only when both hold: a fresh install enables it (it is
 # in the set above), and existing installs were never in a position to choose.
@@ -999,6 +998,11 @@ def invalidate_orphan_cache() -> None:
 # Migration cleanup
 # ---------------------------------------------------------------------------
 
+#: Appended to ``installed.json`` and ``app.json`` when a migrated builtin's record
+#: is retired: the files stay beside ``data/`` as the record's backup, and nothing
+#: reads them as an installed app.
+RETIRED_RECORD_SUFFIX = ".retired"
+
 
 def migrated_builtin_cleanup_applies(name: str) -> bool:
     """Whether a safe builtin-owned record qualifies for migration teardown and removal.
@@ -1031,7 +1035,8 @@ def cleanup_migrated_builtin(name: str) -> AppResult:
     the migration mechanism won't have migratedTo set. The presence of `name` in
     _MIGRATED_BUILTINS is the authoritative signal.
 
-    Preserves data/ directory. Removes installed.json and app.json only.
+    Preserves data/ directory. Retires installed.json and app.json only, by renaming
+    each to ``<file>.retired`` beside it, so the record stays on disk as a backup.
     Idempotent: returns ok=True if already cleaned up.
     """
     from kiro_crew.apps.builtins import _MIGRATED_BUILTINS
@@ -1057,16 +1062,30 @@ def cleanup_migrated_builtin(name: str) -> AppResult:
             message="already migrated — standalone version is in place",
         )
 
-    # Perform cleanup — remove metadata files, preserve data/
+    # The record is the only copy of a folded app's on/off state, so that state
+    # is written to its core setting first, and a failed write keeps the record
+    # for the next start to try again.
+    try:
+        carry_folded_switch(name, meta)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("cleanup_migrated_builtin: kept %s, its setting was not saved: %s", name, exc)
+        return AppResult(
+            ok=False,
+            name=name,
+            error=f"failed to save the setting that replaces this app: {exc}",
+            error_code="io_error",
+        )
+
+    # Perform cleanup: move the metadata files aside, preserve data/. installed.json
+    # goes last, because its absence is what reads as "already cleaned up".
     dest = app_dir(name)
     installed_path = dest / INSTALLED_META_FILENAME
     manifest_path = dest / APP_MANIFEST_FILENAME
 
     try:
-        if manifest_path.is_file():
-            manifest_path.unlink()
-        if installed_path.is_file():
-            installed_path.unlink()
+        for path in (manifest_path, installed_path):
+            if path.is_file():
+                os.replace(path, path.with_name(path.name + RETIRED_RECORD_SUFFIX))
     except OSError as exc:
         logger.error("cleanup_migrated_builtin: failed to clean up %s: %s", name, exc)
         return AppResult(
@@ -1080,7 +1099,7 @@ def cleanup_migrated_builtin(name: str) -> AppResult:
     refresh_app_config_keys()
     invalidate_orphan_cache()
 
-    logger.info("Cleaned up migrated builtin %s (data preserved)", name)
+    logger.info("Cleaned up migrated builtin %s (data and a record backup preserved)", name)
     return AppResult(
         ok=True,
         name=name,

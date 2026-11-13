@@ -2851,6 +2851,19 @@ export const SETTINGS_REGISTRY: SettingEntry[] =
     }
   },
   {
+    "id": "display.show-task-runner",
+    "label": "Show Task Runner",
+    "labelKey": "pages.settings.displayPanel.task_runner",
+    "description": "Task Runner runs multi-step task plans unattended. Off hides it from the sidebar and Search and refuses new runs. Runs already going keep going.",
+    "tab": "display",
+    "type": "toggle",
+    "occurrence": 1,
+    "params": {
+      "sub": "view"
+    },
+    "configKey": "taskrunner.enabled"
+  },
+  {
     "id": "display.show-tray-icon",
     "label": "Show tray icon",
     "labelKey": "pages.settings.displayPanel.show_tray_icon",

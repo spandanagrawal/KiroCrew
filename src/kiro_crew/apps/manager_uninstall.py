@@ -20,6 +20,7 @@ from pathlib import Path
 
 from kiro_crew import platform_compat
 from kiro_crew.apps import agent_readonly_dirs, credential_masks, protected_app_state
+from kiro_crew.apps.builtin_fold import carry_folded_switch
 from kiro_crew.apps.host_exec_grants import revoke_host_exec
 from kiro_crew.apps.manager_builtins import (
     invalidate_orphan_cache,
@@ -96,6 +97,18 @@ def uninstall_app(name: str, *, keep_data: bool = True, retired_builtin: bool = 
         return AppResult(
             ok=False, name=name, error="not a migrated builtin", error_code="not_orphaned"
         )
+    if retired_builtin:
+        # A folded app's record is the only copy of its on/off state; the boot
+        # cleanup carries it the same way before retiring the record.
+        try:
+            carry_folded_switch(name, meta)
+        except Exception as exc:  # noqa: BLE001
+            return AppResult(
+                ok=False,
+                name=name,
+                error=f"failed to save the setting that replaces this app: {exc}",
+                error_code="io_error",
+            )
     if meta.lifecycle == "locked" and not retired_builtin:
         return AppResult(
             ok=False,

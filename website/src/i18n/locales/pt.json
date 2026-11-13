@@ -5298,20 +5298,6 @@
         "warnings": "Avisos"
       }
     },
-    "projects": {
-      "manifest": {
-        "description": "Entregue um trabalho de várias etapas e deixe que ele vá até o fim sem supervisão. Descreva o trabalho em linguagem simples, cole uma especificação escrita ou envie um arquivo YAML e, então, gere primeiro um plano para revisar as etapas ou comece na hora. Cada execução ganha uma página própria com o progresso passo a passo, e você pode pausar, retomar, tentar novamente ou parar a qualquer momento.",
-        "display_name": "Task Runner",
-        "highlight_1": "Três formas de começar: descreva o trabalho em linguagem simples, cole uma especificação ou envie um YAML",
-        "highlight_2": "Gere um plano e revise as etapas antes de se comprometer com uma execução",
-        "highlight_3": "As execuções acontecem sem supervisão, com o progresso passo a passo na página da própria execução",
-        "highlight_4": "Pause, retome, tente novamente ou pare uma execução a qualquer momento",
-        "highlight_5": "Mantém um histórico das execuções anteriores e dos resultados delas",
-        "page_label": "Task Runner",
-        "use_case_1": "Planeje e execute um trabalho multiagente com dependências a partir de linguagem natural, uma especificação existente ou YAML determinístico.",
-        "configuration_1": "Abra o Task Runner, escolha Compose, From Spec ou From YAML, selecione um agente e, se quiser, um workspace absoluto; depois revise com Plan ou inicie imediatamente com Run."
-      }
-    },
     "specBuilder": {
       "api": {
         "phase_building": "construindo",
@@ -20055,7 +20041,10 @@
         "remote_editor_host_save_failed": "Não foi possível salvar o host SSH. Use um nome de host como dev-box ou dev.example.com, sem porta nem caminho.",
         "remote_editor_host_save_error": "Não foi possível salvar o host SSH.",
         "show_topbar_search": "Mostrar a busca na barra superior",
-        "show_topbar_search_desc": "Mostra a caixa de busca no meio da barra superior. Desligado, o espaço dela vai para os controles de cada lado, e as leituras de CPU, MEM e DSK continuam visíveis em janelas mais estreitas. O atalho de busca continua abrindo a busca. Enquanto os atalhos estiverem desligados, a caixa continua visível."
+        "show_topbar_search_desc": "Mostra a caixa de busca no meio da barra superior. Desligado, o espaço dela vai para os controles de cada lado, e as leituras de CPU, MEM e DSK continuam visíveis em janelas mais estreitas. O atalho de busca continua abrindo a busca. Enquanto os atalhos estiverem desligados, a caixa continua visível.",
+        "task_runner": "Mostrar o Task Runner",
+        "task_runner_hint": "O Task Runner executa planos de tarefas de várias etapas sem supervisão. Desativado, ele some da barra lateral e da busca e recusa novas execuções. As execuções em andamento continuam.",
+        "task_runner_save_failed": "Não foi possível salvar a configuração do Task Runner. Tente de novo."
       },
       "importPanel": {
         "agent_data": "Dados do agente",
