@@ -1115,3 +1115,19 @@ async def _stop_spawned_backends() -> None:
             )
         elif result:
             logger.info("Stopped app backend on gateway shutdown: %s", name)
+
+
+async def stop_spawned_backends_at_exit() -> None:
+    """Stop any backend this gateway spawned that is still tracked, at process exit.
+
+    The gateway's exit path calls this after the graceful shutdown, whether that
+    finished or ran out of time. :func:`on_gateway_shutdown` is a dashboard cleanup
+    hook, and the web server runs its cleanup hooks only after its in-flight
+    requests have drained. A request that outlives the graceful budget (an open
+    ``/api/logs`` stream waits up to 30s between entries) means the budget cuts the
+    shutdown before any cleanup hook runs. The hard exit that follows would then
+    leave every spawned backend, with its sandbox wrapper, running under PID 1 and
+    still holding its port. When the sweep did run, it emptied the tracking table,
+    so this finds nothing to stop and returns at once.
+    """
+    await _stop_spawned_backends()

@@ -511,6 +511,37 @@ async def test_the_exit_path_releases_shared_crew_slices_a_timed_out_shutdown_sk
     no_exit._exit.assert_called_once_with(0)
 
 
+@pytest.mark.asyncio
+async def test_the_exit_path_stops_app_backends_a_timed_out_shutdown_never_reached(
+    monkeypatch, seams
+) -> None:
+    """The dashboard cleanup hook that stops the spawned app backends runs only once
+    the web server's in-flight requests drain, so an open log stream lets the
+    graceful deadline cut the shutdown before it. The exit path stops what is still
+    tracked before its hard exit, and leaves an adopted backend running."""
+    import kiro_crew.apps.backend as backend
+    from kiro_crew.apps import hooks_integration
+
+    no_exit = _graceful_exit_seams(monkeypatch)
+    order: list[str] = []
+    no_exit._exit.side_effect = lambda code: order.append("exit")
+    spawned = backend.AppProcess(app_name="spawned-app", proc=MagicMock(name="proc"))
+    adopted = backend.AppProcess(app_name="adopted-app", proc=None, port=4242, adopted_pids=[123])
+    monkeypatch.setattr(backend, "_processes", {"spawned-app": spawned, "adopted-app": adopted})
+
+    def _stop(name: str) -> bool:
+        order.append(f"stop {name}")
+        return True
+
+    monkeypatch.setattr(hooks_integration, "stop_app_backend", _stop)
+    orch = _bare_orchestrator()
+    orch._shutdown = AsyncMock(side_effect=asyncio.TimeoutError())
+
+    await orch._shutdown_and_exit()
+
+    assert order == ["stop spawned-app", "exit"]
+
+
 async def _reached(barrier: asyncio.Event, task: asyncio.Task[Any]) -> None:
     """Wait for ``barrier``, bounded, and fail at once if ``task`` ends first.
 
