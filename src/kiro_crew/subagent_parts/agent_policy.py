@@ -448,6 +448,31 @@ def parent_template_allowlists(
     return parent_template_spawn_policy(parent_session_key, template, accepted_dirs)[1]
 
 
+def with_cron_dispatched_policy(
+    parent_session_key: str, policy: ParentSpawnPolicy, accepted_dirs: object = ()
+) -> ParentSpawnPolicy:
+    """*policy* narrowed by the template a cron fire dispatched, when that differs.
+
+    ``/api/spawn`` reads a cron parent's scheduler capture, whose template a 1.0
+    capture or a job-level agent can spell differently from the agent a member's
+    fire runs; the fire writes that agent into the session record (``cron_turn``).
+    Both declarations apply, so this only ever adds a restriction. An unreadable
+    record leaves *policy* as the scheduler capture answered it.
+    """
+    if not parent_session_key.startswith("cron:") or conductor_spawn_refusal(policy[0]):
+        return policy
+    try:
+        dispatched = _parent_template_for_spawn(parent_session_key)
+    except ParentRecordUnreadable:
+        return policy
+    if not dispatched or dispatched == policy[0]:
+        return policy
+    extra = parent_template_spawn_policy(parent_session_key, dispatched, accepted_dirs)
+    if policy[1] is None or extra[1] is None:
+        return dispatched, None, (*policy[2], *extra[2])
+    return dispatched, policy[1] + extra[1], ()
+
+
 def parent_template_spawn_policy(
     parent_session_key: str, template: str, accepted_dirs: object = ()
 ) -> ParentSpawnPolicy:
