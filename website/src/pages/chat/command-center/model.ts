@@ -8,6 +8,7 @@ import { slotChannelNamespace } from '../../../utils/channelOrigin'
 import { deriveToolCallTitle, parseToolArgs } from '../../../utils/toolCallTitle'
 import { isPrivateMemoryMode } from '../../../utils/sessionRefs'
 import { crewApprovalDecidableHere, crewRootOf } from '../../../lib/crewMode'
+import { isUntitledSession } from '../../../utils/sessionDisplayTitle'
 
 export type RunState = 'running' | 'idle' | 'done' | 'blocked' | 'waiting' | 'needs_input' | 'stopped'
 export const APPROVAL_MODE_KEYS: Record<ApprovalModeKey, string> = {
@@ -304,7 +305,7 @@ export function buildCommandCenter(source: CommandCenterSources, now = Date.now(
   // A turn can be idle while delegated work is active, or while a queued
   // message waits to run; those slot flags keep the session running.
   const nodes: RunNode[] = slots.map((s, index) => ({
-    id: `session:${s.key}`, kind: 'session', ref: s.key, slot: s.key, title: s.title && s.title !== s.key ? s.title : '', ordinal: index + 1,
+    id: `session:${s.key}`, kind: 'session', ref: s.key, slot: s.key, title: s.title && !isUntitledSession(s) ? s.title : '', ordinal: index + 1,
     state: s.needs_input || s.pending_approval || (crewWaiting[s.key] ?? 0) > 0 ? 'needs_input' : s.running || s.subagents_running || (s.queue_depth ?? 0) > 0 ? 'running' : 'idle',
     detail: s.todo?.current || undefined,
   }))
