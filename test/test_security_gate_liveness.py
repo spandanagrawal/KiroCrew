@@ -801,7 +801,16 @@ def _url_payload_command(n: int) -> str:
 #: rebuild's budget for every caller and is reused for a second on the event loop, so
 #: no gate scans ``apps/`` on its own thread. A miss refuses, and refuses later callers
 #: at once while that listing is still in flight. Re-measured.
-_PACKAGE_LINE_BUDGET = 35_901
+#: Raised by 605, from 35,901, to 36,506, for the ``self-protection-git-pager``
+#: liveness floor: a structural predicate refusing a git command that opens or
+#: configures a pager (``git grep -O``, ``-c`` / ``--config-env`` / ``git config`` /
+#: ``GIT_PAGER`` / ``PAGER`` / the GIT_CONFIG env trio, through execution-prefix
+#: wrappers and a same-line ``export``), read in git's own grammar with empty / ``cat``
+#: / trusted-absolute ``cat`` / git-false values allowed; a cheap git-absent gate, an
+#: exception guard on the payload walk, a ``#`` line-comment stripper, one tokenise per
+#: command segment so the walk stays linear, its ungated-floor id and note, and the
+#: facade manifests restating ``_is_git_pager`` and its helpers. Re-measured.
+_PACKAGE_LINE_BUDGET = 36_506
 
 #: Ceiling on any ONE file in the package. This is what the bound is really for --
 #: a package total says nothing about a single file growing back into a second
