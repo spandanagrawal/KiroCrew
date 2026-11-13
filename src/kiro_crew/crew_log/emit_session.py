@@ -79,7 +79,9 @@ def _seed_attempts(session_id: str, log: CrewLog) -> None:
         # Like read_page, this best-effort scan keeps readable records; folds still refuse seq damage.
         # Only records whose bytes hold the type as a JSON string are decoded, so the cost
         # follows the turns, not the whole file; the type check below still decides.
-        for entry in log.iter_from(1, strict_seq=False, contains=b'"turn/started"'):
+        for entry in log.iter_from(
+            1, strict_seq=False, contains=b'"turn/started"', allow="writer_seed"
+        ):
             if entry.type != "turn/started":
                 continue
             turn = entry.data.get("turn")

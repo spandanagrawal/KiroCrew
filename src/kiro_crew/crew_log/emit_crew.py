@@ -103,7 +103,7 @@ def _dispatch_target_ok(data: "Mapping[str, Any]") -> bool:
 def _newest_dispatch_for(log: CrewLog, item: str, start: int) -> "int | None":
     """The seq of the newest ``crew/dispatch`` naming *item* at or after *start*."""
     found: int | None = None
-    for entry in log.iter_from(start):
+    for entry in log.iter_from(start, allow="dispatch_anchor"):
         if entry.type != CREW_DISPATCH:
             continue
         if isinstance(entry.data, Mapping) and entry.data.get("item") == item:

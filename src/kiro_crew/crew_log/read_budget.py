@@ -11,10 +11,18 @@ a pass, one read: an ``iter_from`` walk, a ``get``, a ``page`` or a raw prefix w
 entry ``get`` returns, the entries a page holds. A cold fold, and a walk of its own from
 the top of a unit with no resume point, have no position, so their delta is 0; a raw
 prefix walk re-reads records already folded, so its delta is 0 too. Over ``delta + K`` the call bumps :func:`snapshot`
-and logs one WARNING per call site. :data:`MODE_ENV` picks ``report`` or ``off``; see
-``docs/system-specs/modules/crew-log-projection.md`` section 4.1.
+and logs one WARNING per call site.
 
-Stdlib only, so the gateway's boot path can import it for the mark.
+In ``raise`` mode (the default) two kinds of call are refused with
+:class:`ReadOverBudget` once they cross ``K``, so a refused read costs at most ``K + 1``
+records: a walk of its own from the top of a unit, and a rendering read (``get``,
+``page``, ``iter_from(strict_seq=False)``) whose prefix below its answer passes ``K``. A
+fold pass never raises (it is cold, or it resumes within ``K``), nor does a strict
+``iter_from(seq)`` prefix walk, which only reports. A first read that cannot be avoided
+runs inside :func:`allowed`, with a reason from :data:`ALLOW_REASONS`. ``off`` counts and
+refuses nothing; see ``docs/system-specs/modules/crew-log-projection.md`` section 4.1.
+
+Stdlib and ``crew_log.errors`` only, so the gateway's boot path can import it for the mark.
 """
 
 from __future__ import annotations
@@ -26,6 +34,8 @@ import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any, Final
+
+from kiro_crew.crew_log.errors import CrewLogError
 
 logger = logging.getLogger(__name__)
 
@@ -41,11 +51,25 @@ logger = logging.getLogger(__name__)
 #:   not reported; records per slot is 1,168 at p90, so the reported ones are the costly.
 K: Final[int] = 256
 
-#: The setting: ``report`` (default) or ``off``. Anything else reads as ``report``, so a
-#: typo never switches counting off.
+#: The setting: ``raise`` (default) or ``off``. Anything else reads as ``raise``, so a
+#: typo never switches the refusal off.
 MODE_ENV: Final[str] = "KIROCREW_CREW_LOG_READ_BUDGET"
-MODE_REPORT: Final[str] = "report"
+MODE_RAISE: Final[str] = "raise"
 MODE_OFF: Final[str] = "off"
+
+#: Why a read may pass ``K`` in ``raise`` mode. Each :func:`allowed` call names one; a test
+#: pins every call site (``test_crew_log_read_budget_raise.py``), and the list only shrinks.
+ALLOW_REASONS: Final[dict[str, str]] = {
+    "first_fold": "no stored position exists yet; the read writes one",
+    "writer_seed": "the writer thread rebuilds a map once on resume",
+    "savepoint_repair": "the savepoint is missing or stale; the read rewrites it",
+    "operator_rebuild": "an operator's rebuild, which walks every unit by design",
+    "operator_listing": "a listing row the status fold cannot give, or one that counts types",
+    "member_log": "member logs have no savepoint; the largest measured is 1,184 records",
+    "cited_span": "a citation's span, at most MAX_REF_SPAN records",
+    "dispatch_anchor": "a crew report's dispatch anchor; a miss mislabels the report for good",
+    "crew_log_page": "a rendering page of a multi-segment unit, which no writer makes yet",
+}
 
 #: Most call sites remembered as already warned. Past it the counters still move and
 #: no new site is logged. shortcut: a fixed cap; raise it if real sites ever exceed it.
@@ -70,14 +94,25 @@ _gateway = False
 _lock = threading.Lock()
 _local = threading.local()
 _warned: "set[tuple[str, str]]" = set()
-_counts: "dict[str, int]" = {"over_budget": 0, "cold_over_budget": 0}
+_counts: "dict[str, int]" = {"over_budget": 0, "cold_over_budget": 0, "raised": 0, "allowed": 0}
 _max_records = 0
+
+
+CODE_OVER_BUDGET: Final[str] = "read_over_budget"
+
+
+class ReadOverBudget(CrewLogError):
+    """A gateway read refused for passing ``K`` (see the module docstring).
+
+    A :class:`~kiro_crew.crew_log.errors.CrewLogError` with code :data:`CODE_OVER_BUDGET`,
+    so a route answers it as any refused read.
+    """
 
 
 class Tally:
     """One call's records: everything decoded, and the part below the seq asked for."""
 
-    __slots__ = ("slot", "fold", "unit", "records", "below", "cold")
+    __slots__ = ("slot", "fold", "unit", "records", "below", "cold", "allowed")
 
     def __init__(self, slot: str, fold: str, unit: str = "") -> None:
         self.slot = slot
@@ -86,6 +121,7 @@ class Tally:
         self.records = 0
         self.below = 0
         self.cold = False
+        self.allowed = False
 
 
 def mark_gateway_process() -> None:
@@ -97,7 +133,7 @@ def mark_gateway_process() -> None:
 def mode() -> str:
     """The live mode. See :data:`MODE_ENV`."""
     raw = os.environ.get(MODE_ENV, "").strip().lower()
-    return MODE_OFF if raw == MODE_OFF else MODE_REPORT
+    return MODE_OFF if raw == MODE_OFF else MODE_RAISE
 
 
 def _counting() -> bool:
@@ -127,6 +163,51 @@ def fold_scope(slot: str, fold: str) -> "Iterator[Tally | None]":
         _settle(tally)
 
 
+def allow_reason(reason: str) -> str:
+    """*reason* if it is one of :data:`ALLOW_REASONS`; ``ValueError`` otherwise."""
+    if reason not in ALLOW_REASONS:
+        raise ValueError(f"unknown read budget allow reason {reason!r}")
+    return reason
+
+
+@contextmanager
+def allowed(reason: str) -> "Iterator[None]":
+    """Let every read made inside pass ``K`` without raising, for *reason*.
+
+    For a read that runs to its end inside the block; a lazy ``iter_from`` handed out of
+    it takes ``allow=`` instead, which is bound to the walk itself.
+    """
+    allow_reason(reason)
+    held: int = vars(_local).get("allowed", 0)
+    _local.allowed = held + 1
+    try:
+        yield
+    finally:
+        _local.allowed = held
+
+
+def check(tally: "Tally", *, rendering: bool = False) -> None:
+    """Raise :class:`ReadOverBudget` when *tally*, a call of its own, has passed ``K``.
+
+    A *rendering* call passes it on its records below the seq it answers, even from the top
+    of a unit, where it keeps everything it reads; any other cold call on its records.
+    Anything else only reports, at :func:`_settle`.
+    """
+    over = tally.below if rendering else (tally.records if tally.cold else 0)
+    if over <= K or not _gateway or mode() != MODE_RAISE:
+        return
+    if tally.allowed or vars(_local).get("allowed", 0):
+        tally.allowed = True
+        return
+    with _lock:
+        _counts["raised"] += 1
+    raise ReadOverBudget(
+        f"crew log read of {tally.unit or tally.slot or '?'} ({tally.fold}) passed the "
+        f"read budget of {K} records; see {MODE_ENV}",
+        code=CODE_OVER_BUDGET,
+    )
+
+
 def note_origin(origin: str) -> None:
     """Record where the open pass got its state; ``cold`` means it had no position."""
     if origin == "cold" and _counting():
@@ -148,7 +229,11 @@ def open_read(unit_id: str, fold: str = "iter_from") -> "tuple[Tally, bool] | No
         return stack[-1], False
     # The unit goes in the log line only: the warn-once key is the call site, so one
     # site walking many units warns once.
-    return Tally("", fold, unit_id), True
+    tally = Tally("", fold, unit_id)
+    # Inside :func:`allowed` from the start, so the settle that may come before any
+    # :func:`check` (``count_read``) already counts it allowed.
+    tally.allowed = bool(vars(_local).get("allowed", 0))
+    return tally, True
 
 
 def count_read(unit_id: str, fold: str, records: int, delta: int) -> None:
@@ -156,7 +241,8 @@ def count_read(unit_id: str, fold: str, records: int, delta: int) -> None:
 
     For the reads that are not an ``iter_from`` walk (``get``, ``page``, the raw prefix
     walks): inside a :func:`fold_scope` they add to that pass, outside one they are a
-    call of their own under *fold*. Never raises.
+    call of their own under *fold*. A ``get`` or ``page`` of its own may raise
+    :class:`ReadOverBudget` (see :func:`check`), after it is counted; nothing else raises.
     """
     opened = open_read(unit_id, fold)
     if opened is None:
@@ -165,6 +251,8 @@ def count_read(unit_id: str, fold: str, records: int, delta: int) -> None:
     tally.records += records
     tally.below += max(0, records - delta)
     close_read(opened)
+    if opened[1] and fold in ("get", "page"):
+        check(tally, rendering=True)
 
 
 def close_read(opened: "tuple[Tally, bool] | None") -> None:
@@ -200,6 +288,10 @@ def _settle(tally: Tally) -> None:
     try:
         delta = 0 if tally.cold else tally.records - tally.below
         if tally.records <= delta + K:
+            return
+        if tally.allowed:
+            with _lock:
+                _counts["allowed"] += 1
             return
         frames = _caller_frames(3)
         site = frames[0] if frames else "?"

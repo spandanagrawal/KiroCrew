@@ -877,8 +877,13 @@ class CrewLog:
         resume: "ResumePoint | None" = None,
         cursor: "ReadCursor | None" = None,
         contains: bytes | None = None,
+        allow: str | None = None,
     ) -> Iterator[Entry]:
         """Every entry from *seq* onward, OLDEST first -- the shape a fold wants.
+
+        *allow* names a ``read_budget.ALLOW_REASONS`` reason this walk may pass the read
+        budget for; without one a gateway walk from the top of the unit, or a rendering
+        walk with a long prefix, raises ``read_budget.ReadOverBudget`` past it.
 
         *contains* is a raw-bytes prefilter: a record whose bytes do not contain it is
         not decoded and not yielded. Only for a caller that filters by entry type itself
@@ -978,6 +983,8 @@ class CrewLog:
 
         opened = read_budget.open_read(self._id)
         tally = opened[0] if opened is not None else None
+        if tally is not None and allow is not None and opened is not None and opened[1]:
+            tally.allowed = bool(read_budget.allow_reason(allow))
         # A walk of its own, from the top of the unit with no resume point, reads the
         # whole unit: it is cold, with delta 0, however much of it the caller keeps.
         top = opened is not None and opened[1] and usable is None
@@ -1000,7 +1007,13 @@ class CrewLog:
         top: bool = False,
         contains: bytes | None = None,
     ) -> Iterator[Entry]:
-        """:meth:`iter_from`'s walk, adding each decoded record to *tally* when given."""
+        """:meth:`iter_from`'s walk, adding each decoded record to *tally* when given.
+
+        A walk of its own (*top*) stops with ``read_budget.ReadOverBudget`` once it
+        passes the budget (see ``read_budget.check``).
+        """
+        from kiro_crew.crew_log import read_budget
+
         walked = 0
         # A rendering read checks no advancing seq, so the prefix below *seq* is not
         # owed a decode: it may seek (see ``_iter_segments_located``).
@@ -1010,11 +1023,14 @@ class CrewLog:
         )
         for entry, segment, at in located:
             if tally is not None:
-                if top and not tally.records and entry.seq >= seq:
+                # A rendering walk keeps what it reads from the top, so it is not cold.
+                if top and strict_seq and not tally.records and entry.seq >= seq:
                     tally.cold = True
                 tally.records += 1
                 if entry.seq < seq:
                     tally.below += 1
+                if top:
+                    read_budget.check(tally, rendering=not strict_seq)
             if entry.seq <= walked:
                 if strict_seq:
                     raise CrewLogError(
@@ -1410,9 +1426,12 @@ class CrewLog:
         try:
             # Stops at the last cited seq: a citation is a definite span, so the
             # records above it are never part of the answer and need not be read.
-            found = tuple(
-                itertools.takewhile(lambda e: e.seq <= last, target.iter_from(pointer.from_seq))
-            )
+            from kiro_crew.crew_log import read_budget
+
+            with read_budget.allowed("cited_span"):
+                found = tuple(
+                    itertools.takewhile(lambda e: e.seq <= last, target.iter_from(pointer.from_seq))
+                )
         except CrewLogError:
             # A missing middle segment or a torn line RAISES out of the read. That
             # is the very condition this method promises to report, so it is

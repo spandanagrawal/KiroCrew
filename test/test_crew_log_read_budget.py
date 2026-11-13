@@ -106,7 +106,7 @@ def test_a_cold_fold_on_a_gateway_thread_is_reported_with_its_call_site(caplog):
     assert "test_crew_log_read_budget.py:" in line and "board_reader" in line
     counts = read_budget.snapshot()
     assert counts["over_budget"] == 1 and counts["cold_over_budget"] == 1
-    assert counts["max_records"] == 3 * read_budget.K and counts["mode"] == "report"
+    assert counts["max_records"] == 3 * read_budget.K and counts["mode"] == "raise"
 
 
 def test_the_same_call_site_warns_once_and_counts_every_time(caplog):
@@ -188,6 +188,8 @@ def test_nothing_is_counted_outside_the_gateway_or_when_off(monkeypatch):
         "over_budget": 0,
         "cold_over_budget": 0,
         "max_records": 0,
+        "raised": 0,
+        "allowed": 0,
         "mode": "off",
         "k": read_budget.K,
     }
@@ -273,7 +275,6 @@ PINNED_COLD_FOLD_CALLERS: "dict[str, int]" = {
     "dashboard/handlers/member_dashboard.py": 1,
     "dashboard/handlers/member_dashboard_fields.py": 1,
     "dashboard/handlers/usage_context.py": 1,
-    "dashboard/handlers/work_ledger_board.py": 1,
     "dashboard/session_control_parts/session_status.py": 1,
     "dashboard_agentic.py": 1,
     "session_ledger.py": 1,

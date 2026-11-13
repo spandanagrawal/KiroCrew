@@ -388,7 +388,11 @@ def read_child_entries(slot_keys: Sequence[str], agent_id: str) -> CrewRead:
     if not unit:
         return CrewRead(omitted=omitted)
     start = seq_spawned or 1
-    page = read_page(unit, start, start + CREW_SCAN_MAX - 1)
+    from kiro_crew.crew_log import read_budget
+
+    # A rendering page of a multi-segment unit; no writer makes one yet; cost equals main.
+    with read_budget.allowed("crew_log_page"):
+        page = read_page(unit, start, start + CREW_SCAN_MAX - 1)
     rows = tuple(
         entry
         for entry in page.get("entries") or ()

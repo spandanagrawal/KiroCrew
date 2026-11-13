@@ -881,7 +881,8 @@ def main() -> None:
         # keys off to decide whether to arm itself (see start_dashboard). Cheap
         # and gateway-only — other CLI subcommands are short-lived and skip it.
         faulthandler.enable()
-        # Count crew-log records this process decodes per read (report mode by
+        # Count crew-log records this process decodes per read, and refuse the
+        # reads that pass the budget (raise mode by
         # default; see crew_log/read_budget.py). Gateway-only for the same reason as
         # faulthandler: a child or another subcommand never marks itself, so its
         # reads are not counted. A stdlib-only module and one flag.

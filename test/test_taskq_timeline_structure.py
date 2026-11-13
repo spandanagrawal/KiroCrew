@@ -108,6 +108,8 @@ def test_the_crew_log_is_reached_only_through_its_read_surface() -> None:
     assert pulled == {
         "kiro_crew.crew_log.read.read_page",
         "kiro_crew.crew_log.resolve.child_record",
+        # Only to name the read's budget allowance (``read_budget.allowed``); it writes nothing.
+        "kiro_crew.crew_log.read_budget",
     }, sorted(pulled)
 
 

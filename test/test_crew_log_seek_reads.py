@@ -75,6 +75,7 @@ def decoded(monkeypatch):
 def _full_walk(monkeypatch, read):
     """*read*'s answer with every seek and the read_page tail shortcut turned off."""
     with monkeypatch.context() as patch:
+        patch.setenv(read_budget.MODE_ENV, read_budget.MODE_OFF)
         patch.setattr(crew_log_store, "_offset_below", lambda *_a: 0, raising=False)
         patch.setattr(CrewLog, "tail_records", lambda self, count: ())
         return read()
@@ -154,6 +155,9 @@ def test_a_seq_gap_below_the_page_falls_back_to_the_full_walk(decoded, monkeypat
     _unit()
     _rewrite(lambda raw: [] if BIG - 1500 < json.loads(raw)["seq"] < BIG - 30 else [raw])
     expected = _full_walk(monkeypatch, lambda: _page(None))
+    with pytest.raises(read_budget.ReadOverBudget):
+        _page(None)  # the full walk passes the budget, so by default it is refused
+    monkeypatch.setattr(read_budget, "check", lambda *_a, **_k: None)
     del decoded[:]
     assert _page(None) == expected
     assert len(expected[0]) == 50 and expected[0][-1]["seq"] < BIG - 1500
@@ -163,6 +167,10 @@ def test_a_seq_gap_below_the_page_falls_back_to_the_full_walk(decoded, monkeypat
 def test_a_unit_of_two_segments_reads_from_the_top(decoded, monkeypatch):
     _unit()
     _split_into_segments(lg.KIND_SESSION, UNIT, BIG // 2)
+    for read in (lambda: _get(BIG - 3), lambda: _page(None)):
+        with pytest.raises(read_budget.ReadOverBudget):
+            read()  # no seek across segments, so the walk passes the budget
+    monkeypatch.setattr(read_budget, "check", lambda *_a, **_k: None)
     for read in (lambda: _get(BIG - 3), lambda: _page(None)):
         expected = _full_walk(monkeypatch, read)
         del decoded[:]

@@ -259,7 +259,11 @@ def _read_page(session_id: str, start: int, end: int) -> dict[str, Any]:
     stays as the named seam the route calls, so the lazy load happens on the first
     read rather than at import.
     """
-    return _crew_log_read().read_page(session_id, start, end)
+    from kiro_crew.crew_log import read_budget
+
+    # A rendering page of a multi-segment unit; no writer makes one yet; cost equals main.
+    with read_budget.allowed("crew_log_page"):
+        return _crew_log_read().read_page(session_id, start, end)
 
 
 def _unit_id(request: web.Request, given: str) -> tuple[str, bool]:

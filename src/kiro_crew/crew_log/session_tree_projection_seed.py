@@ -656,7 +656,13 @@ def _read_unit(
     # skipped leading record shows as a gap too.
     walked = segments[0][0] - 1 if resume is None else resume.seq
     # strict_seq: a non-advancing record raises (into the fallback) instead of being dropped.
-    walk = handle.iter_from(1 if resume is None else resume.seq + 1, resume=resume, cursor=cursor)
+    walk = handle.iter_from(
+        1 if resume is None else resume.seq + 1,
+        resume=resume,
+        cursor=cursor,
+        # No mark yet: the first walk of the unit, which writes the mark the next uses.
+        allow="first_fold" if resume is None else None,
+    )
     for entry in _until_skipped(walk):
         if entry.seq < 0 or entry.seq != walked + 1:
             # ``iter_from`` skipped a record (damaged or oversized): answer for this unit

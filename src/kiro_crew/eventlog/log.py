@@ -291,7 +291,7 @@ class MemberLog:
             # store: `history` pages through it, and `iter_events` streams it.
             kept: deque[Event] = deque(maxlen=MAX_RETAINED_EVENTS)
             seen = 0
-            for entry in crew_log.iter_from(1):
+            for entry in crew_log.iter_from(1, allow="member_log"):
                 kept.append(_as_event(entry))
                 seen += 1
         except CrewLogError as exc:
@@ -492,11 +492,15 @@ class MemberLog:
             return []
         if self.retained_from:
             if limit is not None and limit >= 0:
-                page = self._crew_log.page(before, limit)
+                from kiro_crew.crew_log import read_budget
+
+                # A page of up to 500 seeks below *before* and reads past K on its way.
+                with read_budget.allowed("member_log"):
+                    page = self._crew_log.page(before, limit)
                 return [_as_event(e) for e in page.entries]
             streamed = [
                 _as_event(e)
-                for e in self._crew_log.iter_from(1)
+                for e in self._crew_log.iter_from(1, allow="member_log")
                 if before is None or e.seq < before
             ]
             return list(reversed(streamed))
@@ -519,7 +523,7 @@ class MemberLog:
         self._ensure_loaded()
         if self._crew_log is None:
             return iter(())
-        return (_as_event(entry) for entry in self._crew_log.iter_from(1))
+        return (_as_event(entry) for entry in self._crew_log.iter_from(1, allow="member_log"))
 
     def iter_held_events_after(self, floor: int) -> Iterator[Event]:
         """Events above *floor*, oldest first, as far as this instance has loaded.

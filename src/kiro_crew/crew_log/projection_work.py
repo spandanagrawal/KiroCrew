@@ -59,7 +59,7 @@ def work_slots_naming_board(slot: str) -> "tuple[str, ...]":
             if handle is None:
                 continue
             names_board = False
-            for entry in handle.iter_from(1, known=KNOWN_TYPES):
+            for entry in handle.iter_from(1, known=KNOWN_TYPES, allow="operator_rebuild"):
                 if (
                     entry.type == WORK_ENTRY_TYPE
                     and _as_str(entry.data.get("slot")) == slot

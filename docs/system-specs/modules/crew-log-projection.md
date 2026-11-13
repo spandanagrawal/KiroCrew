@@ -889,13 +889,40 @@ logs one WARNING per call site:
 crew log read over budget: slot=<slot> fold=<fold> unit=<unit> records=<n> delta=<d> k=256 cold=<bool> caller=<file:line func> < ...
 ```
 
-`KIROCREW_CREW_LOG_READ_BUDGET` picks the mode, read per call: `report` (the default,
-and any unknown value) counts and warns and changes no read; `off` counts nothing. A
-mode that answers "not ready" instead of folding cold comes with the first change that
-opts a real caller into it. `test_crew_log_read_budget.py` pins today's gateway callers
-of the cold-fold API per file, and `test_crew_log_read_budget_gaps.py` pins the callers
-of the whole-unit reads (`.page(`, `.thread_page(`, `.get(<seq>)` on a log handle,
-`iter_from(1`); each count may only go down.
+`KIROCREW_CREW_LOG_READ_BUDGET` picks the mode, read per call: `raise` (the default,
+and any value but `off`) counts, warns, and refuses two kinds of call with
+`read_budget.ReadOverBudget` (a `CrewLogError`, code `read_over_budget`) once they pass
+`K`, so a refused read costs at most `K + 1` records:
+
+- a walk of its own from the top of a unit (cold, delta 0);
+- a rendering read (`get`, `page`, `iter_from(strict_seq=False)` as in `read_page`)
+  whose records below its answer pass `K`.
+
+A fold pass never raises: it is cold, or it resumes within `K`. A strict
+`iter_from(seq)` with no resume point (a prefix walk) only reports; giving those callers
+a resume point is the follow-up. `off` counts and refuses nothing.
+
+A first read that cannot be avoided says why, with `iter_from(..., allow=<reason>)` or
+`read_budget.allowed(<reason>)`, a reason from `read_budget.ALLOW_REASONS`:
+
+| reason | the read |
+|---|---|
+| `first_fold` | the session-tree seed of a unit with no mark yet |
+| `writer_seed` | the writer's attempt map, rebuilt once on resume |
+| `dispatch_anchor` | a crew report's dispatch anchor (`emit_crew`) |
+| `savepoint_repair` | a dashboard instance history rebuilt when its savepoint is gone |
+| `operator_rebuild` | the board rebuild's search for slots naming the board |
+| `operator_listing` | a listed row the `status` fold cannot give, or type counts |
+| `member_log` | member logs, which have no savepoint |
+| `cited_span` | a citation's span, at most `MAX_REF_SPAN` records |
+| `crew_log_page` | the crew-log page route and the task timeline's `read_page`, on a unit of 2+ segments |
+
+The diag row's `crew_log_reads` gains `raised` and `allowed`.
+`test_crew_log_read_budget_raise.py` pins every allowed read per file and reason;
+`test_crew_log_read_budget.py` pins today's gateway callers of the cold-fold API per
+file, and `test_crew_log_read_budget_gaps.py` pins the callers of the whole-unit reads
+(`.page(`, `.thread_page(`, `.get(<seq>)` on a log handle, `iter_from(1`); each count may
+only go down.
 
 ## 5. The push
 

@@ -91,7 +91,7 @@ def run(rounds: int) -> "list[dict[str, object]]":
         off, on = [], []
         for _ in range(rounds):
             off.append(_cold(units, slot, read_budget.MODE_OFF))
-            on.append(_cold(units, slot, read_budget.MODE_REPORT))
+            on.append(_cold(units, slot, read_budget.MODE_RAISE))
         cold = seen[-1]
         _write(slot, units[-1], DELTA, start=sizes[-1])
         projection.fold_slot_warm_revised(FOLD, units, slot=slot)

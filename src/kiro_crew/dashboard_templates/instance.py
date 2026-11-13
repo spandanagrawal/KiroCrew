@@ -902,7 +902,7 @@ def _fold_history_from_log(slug: str, session_id: str) -> dict[str, Any]:
         handle = open_session_log(session_id)
         if handle is None:
             return state
-        for entry in handle.iter_from(1):
+        for entry in handle.iter_from(1, allow="savepoint_repair"):
             if getattr(entry, "type", "") != ENTRY_TYPE:
                 continue
             data = getattr(entry, "data", None)

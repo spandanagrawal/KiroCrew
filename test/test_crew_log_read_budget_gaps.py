@@ -103,7 +103,8 @@ def test_a_get_near_the_end_seeks_and_a_get_on_two_segments_is_reported(caplog):
         assert handle.get(3).seq == 3
         assert _warnings(caplog) == []
         _split_into_segments(lg.KIND_SESSION, "acp-get", BIG // 2)
-        assert handle.get(BIG - 1).seq == BIG - 1
+        with pytest.raises(read_budget.ReadOverBudget):
+            handle.get(BIG - 1)
     handle.release_ownership()
     (line,) = _warnings(caplog)
     assert "fold=get unit=acp-get" in line and f"records={BIG - 1}" in line and "delta=1" in line
@@ -173,7 +174,7 @@ def test_a_session_resume_that_still_starts_at_record_one_is_cold(caplog):
     assert "slot=acp-partial fold=session" in line and "cold=True" in line and "delta=0" in line
 
 
-def test_a_walk_from_the_top_of_a_member_log_is_cold_and_a_short_one_is_not(caplog):
+def test_a_walk_from_the_top_of_a_member_log_is_allowed_and_a_short_one_is_not_counted(caplog):
     _unit("ivy", BIG, kind=KIND_MEMBER)
     _unit("acp-short", 100)
     read_budget.mark_gateway_process()
@@ -182,12 +183,10 @@ def test_a_walk_from_the_top_of_a_member_log_is_cold_and_a_short_one_is_not(capl
         short = _open("acp-short")
         assert len(list(short.iter_from(1))) == 100
         short.release_ownership()
-    lines = _warnings(caplog)
-    # Two call sites in the member log each walk it whole: the load and iter_events.
-    assert len(lines) == 2 and all(
-        "fold=iter_from unit=ivy" in x and "delta=0" in x and "cold=True" in x for x in lines
-    )
-    assert read_budget.snapshot()["cold_over_budget"] == 2
+    # Two call sites in the member log each walk it whole, both under ``member_log``.
+    assert _warnings(caplog) == []
+    counts = read_budget.snapshot()
+    assert counts["allowed"] == 2 and counts["raised"] == 0
 
 
 def test_resolve_reads_only_up_to_the_cited_span(monkeypatch):
