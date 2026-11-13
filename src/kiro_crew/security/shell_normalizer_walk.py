@@ -272,17 +272,38 @@ def _substitution_bodies(text: str) -> "list[str]":
     cannot disagree.
     """
     bodies: list[str] = []
+    # A ``$(`` inside double quotes starts its body unquoted, as bash reads it and as
+    # ``shell_commands.read_commands`` does. Walking it with the quote still open hid
+    # its ``)`` and returned the whole remainder: ``B="$(pwd)"; git push origin feat``
+    # yielded ``pwd)"; git push ...``, an open quote the push floor refuses.
+    quoted_dollars = (
+        {s.offset for s in _iter_shell_chars(text) if s.state == 2 and s.text == "$"}
+        if '"' in text
+        else set()
+    )
+    # An escaped backtick (``\```, bare or in double quotes) is a literal character.
+    escaped_ticks = (
+        {s.offset + 1 for s in _iter_shell_chars(text) if s.text == "\\`"}
+        if "\\`" in text
+        else set()
+    )
     i = 0
     while i < len(text):
         # PROCESS substitutions run their body as a command just as a command
         # substitution does -- ``cat <(kirocrew token)`` executes the inner command and
         # feeds its output through a pipe.  Same paren-nesting walk.
+        if i in quoted_dollars and text.startswith("$(", i):
+            close, proven = _matching_close_paren(text[i + 2 :], 0)
+            end = i + 2 + close
+            bodies.append(text[i + 2 : end - 1] if proven else text[i + 2 :])
+            i = end
+            continue
         if text.startswith(("<(", ">(", "$("), i):
             end, proven = _matching_close_paren(text, i + 2)
             bodies.append(text[i + 2 : end - 1] if proven else text[i + 2 :])
             i = end
             continue
-        if text[i] == "`":
+        if text[i] == "`" and i not in escaped_ticks:
             end, proven = _matching_close_backtick(text, i + 1)
             bodies.append(text[i + 1 : end - 1] if proven else text[i + 1 :])
             i = end
@@ -1276,6 +1297,13 @@ def _split_push_command_segments(text: str) -> list[str]:
     walk about where a quote ends.
     """
     segments: list[str] = []
+    # A newline inside quotes is part of the word (a multi-line commit message), not a
+    # separator. Only a newline the shared reader ALSO reads as quoted is kept: it skips
+    # heredoc bodies and comments, where this state machine alone would see a quote.
+    data_newlines = (
+        _quoted_newlines(text) if "\n" in text and ("'" in text or '"' in text) else frozenset()
+    )
+    base = 0
     rest = text
     while True:
         buf: list[str] = []
@@ -1284,7 +1312,9 @@ def _split_push_command_segments(text: str) -> list[str]:
             if step.trailing_escape:
                 buf.append(step.text)
                 break
-            if step.char == "\n":
+            if step.char == "\n" and not (
+                step.text == "\n" and not step.active and base + step.offset in data_newlines
+            ):
                 # A NEWLINE always separates. When it was ESCAPED the backslash
                 # is kept, because that is the splice signal: bash makes the
                 # backslash-newline vanish, fusing the words on either side into
@@ -1305,7 +1335,20 @@ def _split_push_command_segments(text: str) -> list[str]:
         segments.append("".join(buf))
         if resume_at is None:
             return segments
+        base += resume_at
         rest = rest[resume_at:]
+
+
+def _quoted_newlines(text: str) -> "frozenset[int]":
+    """Offsets of each newline the shared reader reads inside quotes in *text*."""
+    from .shell_commands import read_commands  # shell_commands imports this module
+
+    return frozenset(
+        step.start
+        for command in read_commands(text, heredocs=True)
+        for step in command.steps
+        if step.text == "\n" and not step.active
+    )
 
 
 # Shell expansions that fuse text INTO a word, so the literal command hides the
