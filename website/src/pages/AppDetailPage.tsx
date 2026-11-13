@@ -62,7 +62,7 @@ import { openLocalSourceSwitch } from './appDetailPageLocalSwitch'
 import { selectionActionGrantLabel } from '../selectionActions/selectionActionRegistry'
 import type { AppInfo, NormalizedRegistryEntry, RegistryEntry } from './appDetailPageTypes'
 import { actionGrant } from '../composerActions/composerActionRegistry'
-import { memoryAccessLabel } from '../components/appstore/memoryAccessLabel'
+import { memoryAccessLabel, memoryRequested } from '../components/appstore/memoryAccessLabel'
 import { managerLabel, originLabel } from './appDetailPageLabels'
 import { UserSessionReachBox, UserSessionReachStaged, WorkerAutoApproveBox, reachVerbs } from './AppDetailGrantBoxes'
 // The page's parts live in sibling owners that never import this module:
@@ -1813,7 +1813,7 @@ export default function AppDetailPage() {
                   {app.manifest.permissions.storage && <span className="flex items-center gap-1">{i18nT('pages.appDetailPage.storage_yes')}</span>}
                   {app.manifest.permissions.cron && <span className="flex items-center gap-1">{i18nT('pages.appDetailPage.cron_yes')}</span>}
                   {app.manifest.permissions.network && <span className="flex items-center gap-1">{i18nT('pages.appDetailPage.network_yes')}</span>}
-                  {app.manifest.permissions.memory && <span className="flex items-center gap-1">{memoryAccessLabel(app.manifest.permissions.memory)}</span>}
+                  {memoryRequested(app.manifest.permissions.memory) && <span className="flex items-center gap-1">{memoryAccessLabel(app.manifest.permissions.memory as boolean | string)}</span>}
                 </div>
               </div>
             </Card>
