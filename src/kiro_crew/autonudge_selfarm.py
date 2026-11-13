@@ -43,7 +43,6 @@ import contextlib
 import json
 import logging
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -51,6 +50,7 @@ from kiro_crew import platform_compat
 from kiro_crew.atomic_write import atomic_write, replace_with_retry
 from kiro_crew.config.paths import data_home
 from kiro_crew.owner_only_files import owner_only_opener
+from kiro_crew.sqlite_quarantine import reserve_quarantine_name
 
 logger = logging.getLogger(__name__)
 
@@ -109,28 +109,39 @@ def _valid_entries(entries: dict[Any, Any]) -> dict[str, dict[str, Any]]:
 
 
 def _read_record_for_update() -> dict[str, dict[str, Any]]:
-    """The record's entries for a rewrite. Only a missing file reads as empty.
+    """The record's entries for a rewrite; a damaged record is set aside first.
 
-    A record that cannot be opened (a transient EACCES or EIO) raises
-    ``OSError`` and stays as it is: written back from an empty read, it would
-    drop every other loop's entry, and each of those loops is then refused at
-    every fire. A record that opens but is cut off or has the wrong shape is
-    moved to a ``.corrupt-<utc>`` file and the rewrite starts again, so one
-    damaged file does not stop every later self-arm.
+    A record that opens but is cut off or has the wrong shape is moved to a
+    ``.corrupt-<utc>`` file before the rewrite, so its bytes are kept and one
+    damaged file does not stop every later self-arm. A record that cannot be
+    opened (a transient EACCES or EIO) reads as empty and the arm goes ahead. A
+    set-aside that fails is logged and the arm goes ahead too: this read never
+    refuses an arm.
     """
     path = self_arm_record_path()
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}
-    except (UnicodeDecodeError, ValueError):
+    except OSError:
+        # There are no bytes to keep from a record that could not be opened.
+        logger.warning("autonudge self-arm record unreadable; rewriting it", exc_info=True)
+        return {}
+    except ValueError:
         raw = None
     entries = raw.get("loops") if isinstance(raw, dict) else None
     if isinstance(entries, dict):
         return _valid_entries(entries)
     logger.warning("autonudge self-arm record is not readable; setting it aside")
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    replace_with_retry(path, path.with_name(f"{path.name}.corrupt-{stamp}"))
+    target: Path | None = None
+    try:
+        target = reserve_quarantine_name(path)
+        replace_with_retry(path, target)
+    except OSError:
+        if target is not None:
+            with contextlib.suppress(OSError):
+                target.unlink(missing_ok=True)
+        logger.warning("autonudge self-arm record could not be set aside", exc_info=True)
     return {}
 
 
