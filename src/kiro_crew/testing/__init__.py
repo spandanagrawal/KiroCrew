@@ -33,10 +33,18 @@ Import submodules directly (``from kiro_crew.testing.fixtures import ...``,
 so the package namespace stays pytest-free for non-pytest consumers.
 """
 
-# Bind submodules onto the package namespace so ``unittest.mock.patch``
-# can traverse paths like ``kiro_crew.testing.harness.TERMINATE_GRACE_SECONDS``
-# (patch walks dotted paths via getattr; without these binds the lookup
-# fails even though the modules are in sys.modules). Both submodules are
-# pytest-free at import time, so this doesn't pull pytest into consumers
-# that only need the runtime helpers.
-from kiro_crew.testing import fake_channel_wire, fixtures, harness  # noqa: E402,F401
+import importlib
+
+# These submodules resolve as package attributes so a getattr walk such as
+# ``unittest.mock.patch("kiro_crew.testing.harness.TERMINATE_GRACE_SECONDS")``
+# finds them. They bind lazily, on first access, not at package import: the
+# harness alone pulls in about 350 ``kiro_crew`` modules (config, security,
+# sandbox, aiohttp), and an eager bind would make every ``import kiro_crew.testing``
+# pay that, including a consumer that wants only ``clock``, ``ids`` or ``wait``.
+_LAZY_SUBMODULES = frozenset({"fake_channel_wire", "fixtures", "harness"})
+
+
+def __getattr__(name: str):
+    if name in _LAZY_SUBMODULES:
+        return importlib.import_module(f"{__name__}.{name}")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

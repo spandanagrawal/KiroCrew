@@ -1348,6 +1348,40 @@ def test_the_helper_modules_import_without_pytest(tmp_path):
     assert helpers <= loaded <= helpers | {"kiro_crew.loop_lock"}
 
 
+def test_importing_the_testing_package_loads_no_submodule(tmp_path):
+    # The package import loads only the package: an eager harness import costs about
+    # 350 kiro_crew modules, enough to time a child out on a loaded CI runner. Its
+    # submodules resolve as attributes on first access.
+    code = (
+        "import sys\n"
+        "import kiro_crew\n"
+        "before = set(sys.modules)\n"
+        "import kiro_crew.testing\n"
+        "new = sorted(m for m in set(sys.modules) - before if m.startswith('kiro_crew'))\n"
+        "wire = kiro_crew.testing.fake_channel_wire\n"
+        "assert wire is sys.modules['kiro_crew.testing.fake_channel_wire']\n"
+        "try:\n"
+        "    kiro_crew.testing.no_such_helper\n"
+        "except AttributeError:\n"
+        "    pass\n"
+        "else:\n"
+        "    raise SystemExit('an unknown attribute resolved')\n"
+        "print(','.join(new))\n"
+    )
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(_REPO_ROOT / "src") + os.pathsep + env.get("PYTHONPATH", "")
+    out = subprocess.run(
+        [sys.executable, "-B", "-c", code],
+        capture_output=True,
+        check=True,
+        env=env,
+        cwd=tmp_path,
+        timeout=wait.default_timeout(),
+        **UTF8_TEXT,
+    )
+    assert out.stdout.strip() == "kiro_crew.testing"
+
+
 @pytest.mark.parametrize("name", ["clock", "ids", "wait"])
 def test_the_helpers_import_only_the_standard_library(name):
     import ast
